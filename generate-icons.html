@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Extension Icons</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            margin: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .icon-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .icon-item {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>扩展图标生成器</h1>
+    <p>点击下面的按钮下载图标文件，然后将它们放到 public 目录中。</p>
+
+    <div class="icon-container">
+        <div class="icon-item">
+            <canvas id="icon16" width="16" height="16"></canvas>
+            <br>
+            <button onclick="downloadIcon('icon16', 16)">下载 icon16.png</button>
+        </div>
+        <div class="icon-item">
+            <canvas id="icon48" width="48" height="48"></canvas>
+            <br>
+            <button onclick="downloadIcon('icon48', 48)">下载 icon48.png</button>
+        </div>
+        <div class="icon-item">
+            <canvas id="icon128" width="128" height="128"></canvas>
+            <br>
+            <button onclick="downloadIcon('icon128', 128)">下载 icon128.png</button>
+        </div>
+    </div>
+
+    <script>
+        // Draw icon on canvas
+        function drawIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+
+            // Background
+            ctx.fillStyle = '#4285f4';
+            ctx.fillRect(0, 0, size, size);
+
+            // Clock circle
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = size / 16;
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size / 3, 0, 2 * Math.PI);
+            ctx.stroke();
+
+            // Clock hands
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = size / 20;
+            ctx.lineCap = 'round';
+
+            // Hour hand
+            ctx.beginPath();
+            ctx.moveTo(size / 2, size / 2);
+            ctx.lineTo(size / 2, size / 4);
+            ctx.stroke();
+
+            // Minute hand
+            ctx.beginPath();
+            ctx.moveTo(size / 2, size / 2);
+            ctx.lineTo(size / 2 + size / 6, size / 2);
+            ctx.stroke();
+        }
+
+        // Download icon
+        function downloadIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = `icon${size}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Draw all icons on page load
+        window.onload = function() {
+            drawIcon('icon16', 16);
+            drawIcon('icon48', 48);
+            drawIcon('icon128', 128);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,125 @@
+// content.js - 在摸鱼网站页面上显示倒计时
+let countdownOverlay = null
+let countdownInterval = null
+let currentSiteId = null
+
+// 创建倒计时覆盖层
+function createCountdownOverlay() {
+  if (countdownOverlay) return
+
+  countdownOverlay = document.createElement('div')
+  countdownOverlay.id = 'distraction-countdown-overlay'
+  countdownOverlay.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 15px 25px;
+    border-radius: 10px;
+    font-size: 24px;
+    font-weight: bold;
+    z-index: 999999;
+    font-family: Arial, monospace;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    min-width: 150px;
+    text-align: center;
+  `
+  document.body.appendChild(countdownOverlay)
+}
+
+// 更新倒计时显示
+function updateCountdownDisplay(seconds) {
+  if (!countdownOverlay) {
+    createCountdownOverlay()
+  }
+
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = seconds % 60
+
+  const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+
+  countdownOverlay.textContent = timeString
+
+  // 时间快结束时变红
+  if (seconds <= 60) {
+    countdownOverlay.style.background = 'rgba(220, 53, 69, 0.9)'
+  } else if (seconds <= 300) {
+    countdownOverlay.style.background = 'rgba(255, 152, 0, 0.9)'
+  } else {
+    countdownOverlay.style.background = 'rgba(0, 0, 0, 0.85)'
+  }
+}
+
+// 移除倒计时覆盖层
+function removeCountdownOverlay() {
+  if (countdownOverlay) {
+    countdownOverlay.remove()
+    countdownOverlay = null
+  }
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
+}
+
+// 检查当前URL是否匹配摸鱼网站
+async function checkCurrentUrl() {
+  const currentUrl = window.location.href
+
+  try {
+    const result = await chrome.storage.local.get(['websites'])
+    const websites = result.websites || []
+
+    // 查找匹配的网站
+    const matchedSite = websites.find(site =>
+      site.enabled && currentUrl.includes(site.url)
+    )
+
+    if (matchedSite) {
+      currentSiteId = matchedSite.id
+
+      // 通知 background script 开始计时
+      chrome.runtime.sendMessage({
+        type: 'START_TRACKING',
+        siteId: matchedSite.id,
+        url: currentUrl
+      })
+
+      // 显示倒计时
+      updateCountdownDisplay(matchedSite.remainingTime)
+    } else {
+      // 不是摸鱼网站，移除倒计时
+      removeCountdownOverlay()
+      currentSiteId = null
+    }
+  } catch (error) {
+    console.error('检查URL失败:', error)
+  }
+}
+
+// 监听来自 background 的消息
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'UPDATE_COUNTDOWN') {
+    if (message.siteId === currentSiteId) {
+      updateCountdownDisplay(message.remainingTime)
+    }
+  } else if (message.type === 'REDIRECT') {
+    // 倒计时结束，准备跳转
+    window.location.href = message.url
+  }
+})
+
+// 页面加载时检查
+checkCurrentUrl()
+
+// 监听URL变化 (SPA应用)
+let lastUrl = location.href
+new MutationObserver(() => {
+  const currentUrl = location.href
+  if (currentUrl !== lastUrl) {
+    lastUrl = currentUrl
+    checkCurrentUrl()
+  }
+}).observe(document, { subtree: true, childList: true })

@@ -1,0 +1,15 @@
+/* content.css - 倒计时覆盖层样式 */
+#distraction-countdown-overlay {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
