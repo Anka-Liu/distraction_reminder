@@ -55,6 +55,29 @@ async function startTracking(siteId, tabId, url) {
     stopTracking(siteId)
   }
 
+  // 检查当前网站的剩余时间
+  try {
+    const result = await chrome.storage.local.get(['websites', 'redirectUrl'])
+    const websites = normalizeWebsites(result.websites)
+    const redirectUrl = result.redirectUrl || 'https://www.google.com'
+
+    const site = websites.find(s => s.id === siteId)
+
+    if (site && site.remainingTime <= 0) {
+      // 时间已经用完，立即跳转
+      console.log('网站时间已用完，立即跳转:', site.name)
+      try {
+        await chrome.tabs.update(tabId, { url: redirectUrl })
+        console.log('直接跳转成功:', redirectUrl)
+      } catch (error) {
+        console.error('跳转失败:', error)
+      }
+      return // 不创建跟踪记录
+    }
+  } catch (error) {
+    console.error('检查剩余时间失败:', error)
+  }
+
   // 创建新的跟踪记录
   trackingData[siteId] = {
     tabId: tabId,
@@ -128,14 +151,25 @@ async function performRedirect(siteId, redirectUrl) {
   const tabId = trackingData[siteId].tabId
 
   try {
-    // 跳转到指定URL
-    await chrome.tabs.update(tabId, { url: redirectUrl })
-    console.log('已跳转到:', redirectUrl)
+    // 发送跳转消息给 content script
+    await chrome.tabs.sendMessage(tabId, {
+      type: 'REDIRECT',
+      url: redirectUrl
+    })
+    console.log('已发送跳转消息到标签页:', tabId, '目标URL:', redirectUrl)
 
     // 停止跟踪
     stopTracking(siteId)
   } catch (error) {
-    console.error('跳转失败:', error)
+    console.error('发送跳转消息失败，尝试直接跳转:', error)
+    // 如果发送消息失败（例如 content script 未加载），尝试直接跳转
+    try {
+      await chrome.tabs.update(tabId, { url: redirectUrl })
+      console.log('直接跳转成功:', redirectUrl)
+      stopTracking(siteId)
+    } catch (updateError) {
+      console.error('直接跳转也失败:', updateError)
+    }
   }
 }
 
@@ -178,7 +212,12 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     const tab = await chrome.tabs.get(activeTabId)
     await checkTabUrl(tab)
   } catch (error) {
-    console.error('检查标签页失败:', error)
+    // 标签页可能已关闭，这是正常情况
+    if (error.message?.includes('No tab with id')) {
+      console.log('标签页已关闭:', activeTabId)
+    } else {
+      console.error('检查标签页失败:', error)
+    }
   }
 })
 

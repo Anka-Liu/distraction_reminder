@@ -10,8 +10,8 @@
           v-model="redirectUrl"
           type="url"
           placeholder="https://example.com"
-          @change="saveSettings"
         />
+        <button @click="saveRedirectUrl" class="save-btn">保存</button>
       </div>
     </div>
 
@@ -143,7 +143,45 @@ const loadSettings = async () => {
   }
 }
 
-// 保存设置
+// 规范化 URL，确保包含协议
+const normalizeUrl = (url) => {
+  if (!url) return 'https://www.google.com'
+
+  const trimmedUrl = url.trim()
+
+  // 如果已经有协议，直接返回
+  if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+    return trimmedUrl
+  }
+
+  // 如果没有协议，自动添加 https://
+  return 'https://' + trimmedUrl
+}
+
+// 保存跳转网址
+const saveRedirectUrl = async () => {
+  try {
+    // 规范化 redirectUrl，确保包含协议
+    const normalizedRedirectUrl = normalizeUrl(redirectUrl.value)
+
+    // 如果 URL 被修改了，更新显示
+    if (normalizedRedirectUrl !== redirectUrl.value) {
+      redirectUrl.value = normalizedRedirectUrl
+      console.log('[OptionsApp] URL已规范化为:', normalizedRedirectUrl)
+    }
+
+    await chrome.storage.local.set({
+      redirectUrl: normalizedRedirectUrl
+    })
+    console.log('[OptionsApp] 跳转网址已保存:', normalizedRedirectUrl)
+    alert('跳转网址已保存')
+  } catch (error) {
+    console.error('[OptionsApp] 保存跳转网址失败:', error)
+    alert('保存失败，请重试')
+  }
+}
+
+// 保存设置（网站列表）
 const saveSettings = async () => {
   try {
     console.log('[OptionsApp] 准备保存设置, websites:', websites.value)
@@ -154,7 +192,6 @@ const saveSettings = async () => {
     console.log('[OptionsApp] 序列化后的websites:', plainWebsites)
 
     await chrome.storage.local.set({
-      redirectUrl: redirectUrl.value,
       websites: plainWebsites
     })
     console.log('[OptionsApp] 设置已保存')
