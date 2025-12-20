@@ -3,6 +3,18 @@ let countdownOverlay = null
 let countdownInterval = null
 let currentSiteId = null
 
+// 辅助函数：从 storage 读取 websites 并正确处理类型
+function normalizeWebsites(storageWebsites) {
+  if (Array.isArray(storageWebsites)) {
+    return storageWebsites
+  } else if (storageWebsites && typeof storageWebsites === 'object') {
+    // 如果是对象（例如被错误保存为 {0: {...}, 1: {...}}），转换为数组
+    console.warn('[content.js normalizeWebsites] ⚠️ websites被存储为对象，转换为数组')
+    return Object.values(storageWebsites)
+  }
+  return []
+}
+
 // 创建倒计时覆盖层
 function createCountdownOverlay() {
   if (countdownOverlay) return
@@ -70,14 +82,7 @@ async function checkCurrentUrl() {
 
   try {
     const result = await chrome.storage.local.get(['websites'])
-
-    // 处理 websites 可能是对象的情况
-    let websites = []
-    if (Array.isArray(result.websites)) {
-      websites = result.websites
-    } else if (result.websites && typeof result.websites === 'object') {
-      websites = Object.values(result.websites)
-    }
+    const websites = normalizeWebsites(result.websites)
 
     // 查找匹配的网站
     const matchedSite = websites.find(site =>

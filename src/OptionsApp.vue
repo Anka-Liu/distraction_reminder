@@ -99,6 +99,18 @@ const newSite = ref({
   defaultTime: 600
 })
 
+// 辅助函数：从 storage 读取 websites 并正确处理类型
+function normalizeWebsites(storageWebsites) {
+  if (Array.isArray(storageWebsites)) {
+    return storageWebsites
+  } else if (storageWebsites && typeof storageWebsites === 'object') {
+    // 如果是对象（例如被错误保存为 {0: {...}, 1: {...}}），转换为数组
+    console.warn('[OptionsApp normalizeWebsites] ⚠️ websites被存储为对象，转换为数组')
+    return Object.values(storageWebsites)
+  }
+  return []
+}
+
 // 格式化时间显示
 const formatTime = (seconds) => {
   if (seconds <= 0) return '00:00:00'
@@ -121,16 +133,8 @@ const loadSettings = async () => {
       redirectUrl.value = result.redirectUrl
     }
     if (result.websites) {
-      // 确保 websites 是数组格式
-      let websitesData = []
-      if (Array.isArray(result.websites)) {
-        websitesData = result.websites
-      } else if (result.websites && typeof result.websites === 'object') {
-        // 如果是对象，转换为数组
-        console.warn('[OptionsApp] ⚠️ websites被存储为对象，转换为数组')
-        websitesData = Object.values(result.websites)
-      }
-
+      // 使用辅助函数确保 websites 是数组格式
+      const websitesData = normalizeWebsites(result.websites)
       websites.value = websitesData
       console.log('[OptionsApp] websites数量:', websitesData.length)
     }
