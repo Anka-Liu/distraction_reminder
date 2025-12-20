@@ -2,6 +2,18 @@
 let trackingData = {} // 存储每个网站的跟踪信息
 let activeTabId = null
 
+// 辅助函数：从 storage 读取 websites 并正确处理类型
+function normalizeWebsites(storageWebsites) {
+  if (Array.isArray(storageWebsites)) {
+    return storageWebsites
+  } else if (storageWebsites && typeof storageWebsites === 'object') {
+    // 如果是对象（例如被错误保存为 {0: {...}, 1: {...}}），转换为数组
+    console.warn('[normalizeWebsites] ⚠️ websites被存储为对象，转换为数组')
+    return Object.values(storageWebsites)
+  }
+  return []
+}
+
 // 初始化
 chrome.runtime.onInstalled.addListener(() => {
   console.log('摸鱼控制器已安装')
@@ -65,7 +77,7 @@ function stopTracking(siteId) {
 async function updateTimer(siteId) {
   try {
     const result = await chrome.storage.local.get(['websites', 'redirectUrl'])
-    const websites = result.websites || []
+    const websites = normalizeWebsites(result.websites)
     const redirectUrl = result.redirectUrl || 'https://www.google.com'
 
     const siteIndex = websites.findIndex(site => site.id === siteId)
@@ -131,7 +143,7 @@ async function performRedirect(siteId, redirectUrl) {
 async function updateSiteTimer(siteId, newRemainingTime) {
   try {
     const result = await chrome.storage.local.get(['websites'])
-    const websites = result.websites || []
+    const websites = normalizeWebsites(result.websites)
 
     const siteIndex = websites.findIndex(site => site.id === siteId)
     if (siteIndex !== -1) {
@@ -192,19 +204,30 @@ async function checkTabUrl(tab) {
   if (!tab.url) return
 
   try {
+    console.log('[checkTabUrl] 检查标签页:', tab.id, tab.url)
     const result = await chrome.storage.local.get(['websites'])
-    const websites = result.websites || []
+    console.log('[checkTabUrl] Storage 原始结果:', result)
+    console.log('[checkTabUrl] result.websites类型:', typeof result.websites)
+    console.log('[checkTabUrl] 是否为数组:', Array.isArray(result.websites))
 
+    const websites = normalizeWebsites(result.websites)
+
+    console.log('[checkTabUrl] websites内容:', websites)
+    console.log('[checkTabUrl] websites长度:', websites.length)
     // 检查是否匹配任何摸鱼网站
     for (const site of websites) {
+      console.log('[checkTabUrl] 检查网站:', site.name, site.url, 'enabled:', site.enabled)
       if (site.enabled && tab.url.includes(site.url)) {
         // 匹配到摸鱼网站
+        console.log('[checkTabUrl] ✓ 匹配到摸鱼网站:', site.name)
         if (!trackingData[site.id] || trackingData[site.id].tabId !== tab.id) {
           startTracking(site.id, tab.id, tab.url)
         }
         return
       }
     }
+
+    console.log('[checkTabUrl] 未匹配到任何摸鱼网站')
 
     // 不是摸鱼网站，停止该标签页的所有跟踪
     for (const siteId in trackingData) {

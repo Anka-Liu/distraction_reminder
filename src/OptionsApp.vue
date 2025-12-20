@@ -111,28 +111,56 @@ const formatTime = (seconds) => {
 // 加载设置
 const loadSettings = async () => {
   try {
+    console.log('[OptionsApp] 加载设置...')
     const result = await chrome.storage.local.get(['redirectUrl', 'websites'])
+    console.log('[OptionsApp] 加载到的数据:', result)
+    console.log('[OptionsApp] result.websites类型:', typeof result.websites)
+    console.log('[OptionsApp] 是否为数组:', Array.isArray(result.websites))
+
     if (result.redirectUrl) {
       redirectUrl.value = result.redirectUrl
     }
     if (result.websites) {
-      websites.value = result.websites
+      // 确保 websites 是数组格式
+      let websitesData = []
+      if (Array.isArray(result.websites)) {
+        websitesData = result.websites
+      } else if (result.websites && typeof result.websites === 'object') {
+        // 如果是对象，转换为数组
+        console.warn('[OptionsApp] ⚠️ websites被存储为对象，转换为数组')
+        websitesData = Object.values(result.websites)
+      }
+
+      websites.value = websitesData
+      console.log('[OptionsApp] websites数量:', websitesData.length)
     }
   } catch (error) {
-    console.error('加载设置失败:', error)
+    console.error('[OptionsApp] 加载设置失败:', error)
   }
 }
 
 // 保存设置
 const saveSettings = async () => {
   try {
+    console.log('[OptionsApp] 准备保存设置, websites:', websites.value)
+    console.log('[OptionsApp] websites.value是否为数组:', Array.isArray(websites.value))
+
+    // 确保保存的是纯数组，使用 JSON.parse(JSON.stringify()) 去除 Vue 响应式代理
+    const plainWebsites = JSON.parse(JSON.stringify(websites.value))
+    console.log('[OptionsApp] 序列化后的websites:', plainWebsites)
+
     await chrome.storage.local.set({
       redirectUrl: redirectUrl.value,
-      websites: websites.value
+      websites: plainWebsites
     })
-    console.log('设置已保存')
+    console.log('[OptionsApp] 设置已保存')
+
+    // 验证保存是否成功
+    const verify = await chrome.storage.local.get(['websites'])
+    console.log('[OptionsApp] 验证保存后的数据:', verify.websites)
+    console.log('[OptionsApp] 验证数据是否为数组:', Array.isArray(verify.websites))
   } catch (error) {
-    console.error('保存设置失败:', error)
+    console.error('[OptionsApp] 保存设置失败:', error)
   }
 }
 

@@ -70,7 +70,14 @@ async function checkCurrentUrl() {
 
   try {
     const result = await chrome.storage.local.get(['websites'])
-    const websites = result.websites || []
+
+    // 处理 websites 可能是对象的情况
+    let websites = []
+    if (Array.isArray(result.websites)) {
+      websites = result.websites
+    } else if (result.websites && typeof result.websites === 'object') {
+      websites = Object.values(result.websites)
+    }
 
     // 查找匹配的网站
     const matchedSite = websites.find(site =>
