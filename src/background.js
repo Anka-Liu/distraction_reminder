@@ -99,6 +99,19 @@ function stopTracking(siteId) {
 // 更新计时器
 async function updateTimer(siteId) {
   try {
+    // 检查该网站的tab是否是当前激活的tab
+    if (!trackingData[siteId]) {
+      return
+    }
+
+    const tabId = trackingData[siteId].tabId
+
+    // 只有当该tab是active状态时才进行倒计时
+    if (tabId !== activeTabId) {
+      console.log('[updateTimer] Tab未激活，跳过倒计时:', siteId, 'tabId:', tabId, 'activeTabId:', activeTabId)
+      return
+    }
+
     const result = await chrome.storage.local.get(['websites', 'redirectUrl'])
     const websites = normalizeWebsites(result.websites)
     const redirectUrl = result.redirectUrl || 'https://www.google.com'
@@ -120,18 +133,25 @@ async function updateTimer(siteId) {
       await chrome.storage.local.set({ websites })
 
       // 通知 content script 更新显示
-      if (trackingData[siteId]) {
-        const tabId = trackingData[siteId].tabId
-        try {
-          await chrome.tabs.sendMessage(tabId, {
-            type: 'UPDATE_COUNTDOWN',
-            siteId: siteId,
-            remainingTime: site.remainingTime
-          })
-        } catch (error) {
-          // Tab可能已关闭，停止跟踪
+      try {
+        await chrome.tabs.sendMessage(tabId, {
+          type: 'UPDATE_COUNTDOWN',
+          siteId: siteId,
+          remainingTime: site.remainingTime
+        })
+
+        // 检查是否有运行时错误
+        if (chrome.runtime.lastError) {
+          console.warn('[updateTimer] 发送消息到 content script 失败:', chrome.runtime.lastError.message)
+          // Tab可能已关闭或content script未加载，停止跟踪
           stopTracking(siteId)
+          return
         }
+      } catch (error) {
+        // Tab可能已关闭或无法访问，停止跟踪
+        console.warn('[updateTimer] 无法发送消息到标签页:', tabId, error.message)
+        stopTracking(siteId)
+        return
       }
 
       // 如果时间到了，执行跳转
@@ -140,7 +160,11 @@ async function updateTimer(siteId) {
       }
     }
   } catch (error) {
-    console.error('更新计时器失败:', error)
+    console.error('[background.js] 更新计时器失败:', error)
+    // 发生错误时停止跟踪，避免继续出错
+    if (trackingData[siteId]) {
+      stopTracking(siteId)
+    }
   }
 }
 
@@ -151,24 +175,35 @@ async function performRedirect(siteId, redirectUrl) {
   const tabId = trackingData[siteId].tabId
 
   try {
-    // 发送跳转消息给 content script
+    // 先尝试发送跳转消息给 content script
     await chrome.tabs.sendMessage(tabId, {
       type: 'REDIRECT',
       url: redirectUrl
     })
-    console.log('已发送跳转消息到标签页:', tabId, '目标URL:', redirectUrl)
+
+    // 检查是否有运行时错误
+    if (chrome.runtime.lastError) {
+      console.warn('[performRedirect] 发送跳转消息失败，尝试直接跳转:', chrome.runtime.lastError.message)
+      // 如果发送消息失败，尝试直接跳转
+      await chrome.tabs.update(tabId, { url: redirectUrl })
+      console.log('[performRedirect] 直接跳转成功:', redirectUrl)
+    } else {
+      console.log('[performRedirect] 已发送跳转消息到标签页:', tabId, '目标URL:', redirectUrl)
+    }
 
     // 停止跟踪
     stopTracking(siteId)
   } catch (error) {
-    console.error('发送跳转消息失败，尝试直接跳转:', error)
-    // 如果发送消息失败（例如 content script 未加载），尝试直接跳转
+    console.error('[performRedirect] 跳转失败:', error)
+    // 最后尝试直接更新标签页URL
     try {
       await chrome.tabs.update(tabId, { url: redirectUrl })
-      console.log('直接跳转成功:', redirectUrl)
+      console.log('[performRedirect] 备用跳转成功:', redirectUrl)
       stopTracking(siteId)
     } catch (updateError) {
-      console.error('直接跳转也失败:', updateError)
+      console.error('[performRedirect] 所有跳转方式都失败:', updateError)
+      // 即使跳转失败也要停止跟踪，避免继续消耗资源
+      stopTracking(siteId)
     }
   }
 }
@@ -193,13 +228,18 @@ async function updateSiteTimer(siteId, newRemainingTime) {
             siteId: siteId,
             remainingTime: newRemainingTime
           })
+
+          // 检查是否有运行时错误
+          if (chrome.runtime.lastError) {
+            console.warn('[updateSiteTimer] 发送消息失败:', chrome.runtime.lastError.message)
+          }
         } catch (error) {
-          console.error('更新显示失败:', error)
+          console.warn('[updateSiteTimer] 更新显示失败:', error.message)
         }
       }
     }
   } catch (error) {
-    console.error('更新计时器失败:', error)
+    console.error('[background.js] 更新计时器失败:', error)
   }
 }
 
@@ -214,9 +254,9 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   } catch (error) {
     // 标签页可能已关闭，这是正常情况
     if (error.message?.includes('No tab with id')) {
-      console.log('标签页已关闭:', activeTabId)
+      console.log('[tabs.onActivated] 标签页已关闭:', activeTabId)
     } else {
-      console.error('检查标签页失败:', error)
+      console.error('[tabs.onActivated] 检查标签页失败:', error)
     }
   }
 })
@@ -224,17 +264,25 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 // 监听标签页更新
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
-    await checkTabUrl(tab)
+    try {
+      await checkTabUrl(tab)
+    } catch (error) {
+      console.error('[tabs.onUpdated] 检查标签页URL失败:', error)
+    }
   }
 })
 
 // 监听标签页关闭
 chrome.tabs.onRemoved.addListener((tabId) => {
-  // 停止该标签页相关的所有跟踪
-  for (const siteId in trackingData) {
-    if (trackingData[siteId].tabId === tabId) {
-      stopTracking(siteId)
+  try {
+    // 停止该标签页相关的所有跟踪
+    for (const siteId in trackingData) {
+      if (trackingData[siteId].tabId === tabId) {
+        stopTracking(siteId)
+      }
     }
+  } catch (error) {
+    console.error('[tabs.onRemoved] 清理跟踪数据失败:', error)
   }
 })
 
@@ -275,6 +323,6 @@ async function checkTabUrl(tab) {
       }
     }
   } catch (error) {
-    console.error('检查URL失败:', error)
+    console.error('[background.js] 检查URL失败:', error)
   }
 }

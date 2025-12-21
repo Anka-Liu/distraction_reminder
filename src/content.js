@@ -3,6 +3,15 @@ let countdownOverlay = null
 let countdownInterval = null
 let currentSiteId = null
 
+// 检查扩展上下文是否有效
+function isExtensionContextValid() {
+  try {
+    return !!(chrome.runtime && chrome.runtime.id)
+  } catch (error) {
+    return false
+  }
+}
+
 // 辅助函数：从 storage 读取 websites 并正确处理类型
 function normalizeWebsites(storageWebsites) {
   if (Array.isArray(storageWebsites)) {
@@ -78,6 +87,13 @@ function removeCountdownOverlay() {
 
 // 检查当前URL是否匹配摸鱼网站
 async function checkCurrentUrl() {
+  // 检查扩展上下文是否有效
+  if (!isExtensionContextValid()) {
+    console.warn('[content.js] 扩展上下文已失效，停止执行')
+    removeCountdownOverlay()
+    return
+  }
+
   const currentUrl = window.location.href
 
   try {
@@ -92,11 +108,24 @@ async function checkCurrentUrl() {
     if (matchedSite) {
       currentSiteId = matchedSite.id
 
+      // 再次检查上下文（在异步操作后）
+      if (!isExtensionContextValid()) {
+        console.warn('[content.js] 发送消息前上下文已失效')
+        removeCountdownOverlay()
+        return
+      }
+
       // 通知 background script 开始计时
       chrome.runtime.sendMessage({
         type: 'START_TRACKING',
         siteId: matchedSite.id,
         url: currentUrl
+      }, () => {
+        // 检查是否有运行时错误
+        if (chrome.runtime.lastError) {
+          console.warn('[content.js] 发送消息失败:', chrome.runtime.lastError.message)
+          removeCountdownOverlay()
+        }
       })
 
       // 显示倒计时
@@ -107,19 +136,34 @@ async function checkCurrentUrl() {
       currentSiteId = null
     }
   } catch (error) {
-    console.error('检查URL失败:', error)
+    if (error.message && error.message.includes('Extension context invalidated')) {
+      console.warn('[content.js] 扩展上下文已失效，需要刷新页面')
+      removeCountdownOverlay()
+    } else {
+      console.error('[content.js] 检查URL失败:', error)
+    }
   }
 }
 
 // 监听来自 background 的消息
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'UPDATE_COUNTDOWN') {
-    if (message.siteId === currentSiteId) {
-      updateCountdownDisplay(message.remainingTime)
+  // 检查扩展上下文
+  if (!isExtensionContextValid()) {
+    console.warn('[content.js] 接收消息时上下文已失效')
+    return
+  }
+
+  try {
+    if (message.type === 'UPDATE_COUNTDOWN') {
+      if (message.siteId === currentSiteId) {
+        updateCountdownDisplay(message.remainingTime)
+      }
+    } else if (message.type === 'REDIRECT') {
+      // 倒计时结束，准备跳转
+      window.location.href = message.url
     }
-  } else if (message.type === 'REDIRECT') {
-    // 倒计时结束，准备跳转
-    window.location.href = message.url
+  } catch (error) {
+    console.error('[content.js] 处理消息失败:', error)
   }
 })
 
