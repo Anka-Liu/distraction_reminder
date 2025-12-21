@@ -71,7 +71,7 @@
           </div>
 
           <div class="website-actions">
-            <select v-model="site.delayAmount" class="delay-select">
+            <select v-model="site.delayAmount" @change="saveSettings()" class="delay-select">
               <option :value="60">1分钟</option>
               <option :value="300">5分钟</option>
               <option :value="600">10分钟</option>
@@ -121,7 +121,7 @@ const formatTime = (seconds) => {
 }
 
 // 加载设置
-const loadSettings = async () => {
+const loadSettings = async (forceUpdate = false) => {
   try {
     console.log('[OptionsApp] 加载设置...')
     const result = await chrome.storage.local.get(['redirectUrl', 'websites'])
@@ -129,13 +129,52 @@ const loadSettings = async () => {
     console.log('[OptionsApp] result.websites类型:', typeof result.websites)
     console.log('[OptionsApp] 是否为数组:', Array.isArray(result.websites))
 
-    if (result.redirectUrl) {
+    // 只在首次加载时更新 redirectUrl，避免覆盖用户正在编辑的内容
+    if (forceUpdate && result.redirectUrl) {
       redirectUrl.value = result.redirectUrl
     }
+
     if (result.websites) {
       // 使用辅助函数确保 websites 是数组格式
       const websitesData = normalizeWebsites(result.websites)
-      websites.value = websitesData
+
+      // 智能合并：只更新 remainingTime 和 totalTime，保留用户正在编辑的 delayAmount
+      if (!forceUpdate && websites.value.length > 0) {
+        websitesData.forEach((newSite) => {
+          const existingSite = websites.value.find(s => s.id === newSite.id)
+          if (existingSite) {
+            // 只更新计时相关的字段，保留用户选择的 delayAmount
+            existingSite.remainingTime = newSite.remainingTime
+            existingSite.totalTime = newSite.totalTime
+            existingSite.name = newSite.name
+            existingSite.url = newSite.url
+            existingSite.defaultTime = newSite.defaultTime
+            existingSite.enabled = newSite.enabled
+            // 如果 storage 中有 delayAmount，也更新它（说明是从其他地方保存的）
+            if (newSite.delayAmount !== undefined) {
+              existingSite.delayAmount = newSite.delayAmount
+            }
+          }
+        })
+
+        // 处理新增或删除的网站
+        const existingIds = websites.value.map(s => s.id)
+        const newIds = websitesData.map(s => s.id)
+
+        // 添加新网站
+        websitesData.forEach(newSite => {
+          if (!existingIds.includes(newSite.id)) {
+            websites.value.push(newSite)
+          }
+        })
+
+        // 删除已不存在的网站
+        websites.value = websites.value.filter(site => newIds.includes(site.id))
+      } else {
+        // 首次加载或强制更新，直接替换
+        websites.value = websitesData
+      }
+
       console.log('[OptionsApp] websites数量:', websitesData.length)
     }
   } catch (error) {
@@ -267,11 +306,12 @@ const deleteWebsite = (index) => {
 }
 
 onMounted(() => {
-  loadSettings()
+  // 首次加载，使用 forceUpdate = true 完全替换数据
+  loadSettings(true)
 
-  // 定期更新显示的剩余时间
+  // 定期更新显示的剩余时间，使用智能合并模式
   setInterval(() => {
-    loadSettings()
+    loadSettings(false)
   }, 1000)
 })
 </script>
