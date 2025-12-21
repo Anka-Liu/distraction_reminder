@@ -29,12 +29,6 @@
           type="text"
           placeholder="网站URL (如: bilibili.com)"
         />
-        <input
-          v-model.number="newSite.defaultTime"
-          type="number"
-          placeholder="默认时长(秒)"
-          min="1"
-        />
         <button @click="addWebsite">添加</button>
       </div>
     </div>
@@ -95,8 +89,7 @@ const redirectUrl = ref('https://www.google.com')
 const websites = ref([])
 const newSite = ref({
   name: '',
-  url: '',
-  defaultTime: 600
+  url: ''
 })
 
 // 辅助函数：从 storage 读取 websites 并正确处理类型
@@ -255,8 +248,8 @@ const addWebsite = () => {
     id: Date.now(),
     name: newSite.value.name,
     url: newSite.value.url,
-    defaultTime: newSite.value.defaultTime || 600,
-    remainingTime: newSite.value.defaultTime || 600,
+    defaultTime: 0,
+    remainingTime: 0,
     totalTime: 0,
     delayAmount: 300,
     enabled: true
@@ -268,8 +261,7 @@ const addWebsite = () => {
   // 重置表单
   newSite.value = {
     name: '',
-    url: '',
-    defaultTime: 600
+    url: ''
   }
 }
 
@@ -287,7 +279,7 @@ const addDelay = (site) => {
 
 // 重置计时器
 const resetTimer = (site) => {
-  site.remainingTime = site.defaultTime
+  site.remainingTime = 0
   site.totalTime = 0
   saveSettings()
   chrome.runtime.sendMessage({
