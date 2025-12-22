@@ -4,8 +4,11 @@ import { resolve } from 'path'
 import { fileURLToPath } from 'url'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [vue()],
+  define: {
+    __DEV__: mode === 'development'
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -33,4 +36,4 @@ export default defineConfig({
       }
     }
   }
-})
+}))

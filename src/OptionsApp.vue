@@ -156,7 +156,7 @@ function normalizeWebsites(storageWebsites) {
     return storageWebsites
   } else if (storageWebsites && typeof storageWebsites === 'object') {
     // 如果是对象（例如被错误保存为 {0: {...}, 1: {...}}），转换为数组
-    console.warn('[OptionsApp normalizeWebsites] ⚠️ websites被存储为对象，转换为数组')
+    if (__DEV__) console.warn('[OptionsApp normalizeWebsites] ⚠️ websites被存储为对象，转换为数组')
     return Object.values(storageWebsites)
   }
   return []

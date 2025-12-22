@@ -12,13 +12,30 @@ function isExtensionContextValid() {
   }
 }
 
+// 安全地从 storage 读取数据
+async function safeStorageGet(keys) {
+  if (!isExtensionContextValid()) {
+    return null
+  }
+
+  try {
+    return await chrome.storage.local.get(keys)
+  } catch (error) {
+    // 静默处理扩展上下文失效的错误
+    if (error.message && error.message.includes('Extension context invalidated')) {
+      return null
+    }
+    throw error
+  }
+}
+
 // 辅助函数：从 storage 读取 websites 并正确处理类型
 function normalizeWebsites(storageWebsites) {
   if (Array.isArray(storageWebsites)) {
     return storageWebsites
   } else if (storageWebsites && typeof storageWebsites === 'object') {
     // 如果是对象（例如被错误保存为 {0: {...}, 1: {...}}），转换为数组
-    console.warn('[content.js normalizeWebsites] ⚠️ websites被存储为对象，转换为数组')
+    if (__DEV__) console.warn('[content.js normalizeWebsites] ⚠️ websites被存储为对象，转换为数组')
     return Object.values(storageWebsites)
   }
   return []
@@ -89,7 +106,7 @@ function removeCountdownOverlay() {
 async function checkCurrentUrl() {
   // 检查扩展上下文是否有效
   if (!isExtensionContextValid()) {
-    console.warn('[content.js] 扩展上下文已失效，停止执行')
+    if (__DEV__) console.warn('[content.js] 扩展上下文已失效，停止执行')
     removeCountdownOverlay()
     return
   }
@@ -97,7 +114,15 @@ async function checkCurrentUrl() {
   const currentUrl = window.location.href
 
   try {
-    const result = await chrome.storage.local.get(['websites'])
+    const result = await safeStorageGet(['websites'])
+
+    // 如果返回 null，说明扩展上下文已失效
+    if (result === null) {
+      if (__DEV__) console.warn('[content.js] 扩展上下文已失效，需要刷新页面')
+      removeCountdownOverlay()
+      return
+    }
+
     const websites = normalizeWebsites(result.websites)
 
     // 查找匹配的网站
@@ -110,7 +135,7 @@ async function checkCurrentUrl() {
 
       // 再次检查上下文（在异步操作后）
       if (!isExtensionContextValid()) {
-        console.warn('[content.js] 发送消息前上下文已失效')
+        if (__DEV__) console.warn('[content.js] 发送消息前上下文已失效')
         removeCountdownOverlay()
         return
       }
@@ -123,7 +148,7 @@ async function checkCurrentUrl() {
       }, () => {
         // 检查是否有运行时错误
         if (chrome.runtime.lastError) {
-          console.warn('[content.js] 发送消息失败:', chrome.runtime.lastError.message)
+          if (__DEV__) console.warn('[content.js] 发送消息失败:', chrome.runtime.lastError.message)
           removeCountdownOverlay()
         }
       })
@@ -136,12 +161,8 @@ async function checkCurrentUrl() {
       currentSiteId = null
     }
   } catch (error) {
-    if (error.message && error.message.includes('Extension context invalidated')) {
-      console.warn('[content.js] 扩展上下文已失效，需要刷新页面')
-      removeCountdownOverlay()
-    } else {
-      console.error('[content.js] 检查URL失败:', error)
-    }
+    // 只记录非预期的错误
+    console.error('[content.js] 检查URL失败:', error)
   }
 }
 
@@ -149,7 +170,7 @@ async function checkCurrentUrl() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // 检查扩展上下文
   if (!isExtensionContextValid()) {
-    console.warn('[content.js] 接收消息时上下文已失效')
+    if (__DEV__) console.warn('[content.js] 接收消息时上下文已失效')
     return
   }
 

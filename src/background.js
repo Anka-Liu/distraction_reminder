@@ -19,13 +19,27 @@ function getDateKey(date = new Date()) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+// 安全地从 storage 读取数据
+async function safeStorageGet(keys) {
+  try {
+    return await chrome.storage.local.get(keys)
+  } catch (error) {
+    // 静默处理扩展上下文失效的错误
+    if (error.message && error.message.includes('Extension context invalidated')) {
+      if (__DEV__) console.warn('[background.js] 扩展上下文已失效')
+      return null
+    }
+    throw error
+  }
+}
+
 // 辅助函数：从 storage 读取 websites 并正确处理类型
 function normalizeWebsites(storageWebsites) {
   if (Array.isArray(storageWebsites)) {
     return storageWebsites
   } else if (storageWebsites && typeof storageWebsites === 'object') {
     // 如果是对象（例如被错误保存为 {0: {...}, 1: {...}}），转换为数组
-    console.warn('[normalizeWebsites] ⚠️ websites被存储为对象，转换为数组')
+    if (__DEV__) console.warn('[normalizeWebsites] ⚠️ websites被存储为对象，转换为数组')
     return Object.values(storageWebsites)
   }
   return []
@@ -39,7 +53,9 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // 设置默认配置
 async function initializeDefaultSettings() {
-  const result = await chrome.storage.local.get(['redirectUrl', 'websites'])
+  const result = await safeStorageGet(['redirectUrl', 'websites'])
+
+  if (!result) return // 扩展上下文失效
 
   if (!result.redirectUrl) {
     await chrome.storage.local.set({
@@ -74,7 +90,13 @@ async function startTracking(siteId, tabId, url) {
 
   // 检查当前网站的剩余时间
   try {
-    const result = await chrome.storage.local.get(['websites', 'redirectUrl'])
+    const result = await safeStorageGet(['websites', 'redirectUrl'])
+
+    if (!result) {
+      if (__DEV__) console.warn('[startTracking] 扩展上下文已失效')
+      return
+    }
+
     const websites = normalizeWebsites(result.websites)
     const redirectUrl = result.redirectUrl || 'https://www.google.com'
 
@@ -129,7 +151,14 @@ async function updateTimer(siteId) {
       return
     }
 
-    const result = await chrome.storage.local.get(['websites', 'redirectUrl'])
+    const result = await safeStorageGet(['websites', 'redirectUrl'])
+
+    if (!result) {
+      if (__DEV__) console.warn('[updateTimer] 扩展上下文已失效')
+      stopTracking(siteId)
+      return
+    }
+
     const websites = normalizeWebsites(result.websites)
     const redirectUrl = result.redirectUrl || 'https://www.google.com'
 
@@ -168,14 +197,14 @@ async function updateTimer(siteId) {
 
         // 检查是否有运行时错误
         if (chrome.runtime.lastError) {
-          console.warn('[updateTimer] 发送消息到 content script 失败:', chrome.runtime.lastError.message)
+          if (__DEV__) console.warn('[updateTimer] 发送消息到 content script 失败:', chrome.runtime.lastError.message)
           // Tab可能已关闭或content script未加载，停止跟踪
           stopTracking(siteId)
           return
         }
       } catch (error) {
         // Tab可能已关闭或无法访问，停止跟踪
-        console.warn('[updateTimer] 无法发送消息到标签页:', tabId, error.message)
+        if (__DEV__) console.warn('[updateTimer] 无法发送消息到标签页:', tabId, error.message)
         stopTracking(siteId)
         return
       }
@@ -209,7 +238,7 @@ async function performRedirect(siteId, redirectUrl) {
 
     // 检查是否有运行时错误
     if (chrome.runtime.lastError) {
-      console.warn('[performRedirect] 发送跳转消息失败，尝试直接跳转:', chrome.runtime.lastError.message)
+      if (__DEV__) console.warn('[performRedirect] 发送跳转消息失败，尝试直接跳转:', chrome.runtime.lastError.message)
       // 如果发送消息失败，尝试直接跳转
       await chrome.tabs.update(tabId, { url: redirectUrl })
       console.log('[performRedirect] 直接跳转成功:', redirectUrl)
@@ -237,7 +266,13 @@ async function performRedirect(siteId, redirectUrl) {
 // 手动更新网站计时器（从设置页面调用）
 async function updateSiteTimer(siteId, newRemainingTime) {
   try {
-    const result = await chrome.storage.local.get(['websites'])
+    const result = await safeStorageGet(['websites'])
+
+    if (!result) {
+      if (__DEV__) console.warn('[updateSiteTimer] 扩展上下文已失效')
+      return
+    }
+
     const websites = normalizeWebsites(result.websites)
 
     const siteIndex = websites.findIndex(site => site.id === siteId)
@@ -257,10 +292,10 @@ async function updateSiteTimer(siteId, newRemainingTime) {
 
           // 检查是否有运行时错误
           if (chrome.runtime.lastError) {
-            console.warn('[updateSiteTimer] 发送消息失败:', chrome.runtime.lastError.message)
+            if (__DEV__) console.warn('[updateSiteTimer] 发送消息失败:', chrome.runtime.lastError.message)
           }
         } catch (error) {
-          console.warn('[updateSiteTimer] 更新显示失败:', error.message)
+          if (__DEV__) console.warn('[updateSiteTimer] 更新显示失败:', error.message)
         }
       }
     }
@@ -318,7 +353,13 @@ async function checkTabUrl(tab) {
 
   try {
     console.log('[checkTabUrl] 检查标签页:', tab.id, tab.url)
-    const result = await chrome.storage.local.get(['websites'])
+    const result = await safeStorageGet(['websites'])
+
+    if (!result) {
+      if (__DEV__) console.warn('[checkTabUrl] 扩展上下文已失效')
+      return
+    }
+
     console.log('[checkTabUrl] Storage 原始结果:', result)
     console.log('[checkTabUrl] result.websites类型:', typeof result.websites)
     console.log('[checkTabUrl] 是否为数组:', Array.isArray(result.websites))
