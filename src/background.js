@@ -2,6 +2,23 @@
 let trackingData = {} // 存储每个网站的跟踪信息
 let activeTabId = null
 
+// 辅助函数：获取当前日期标识（以4点为界）
+function getDateKey(date = new Date()) {
+  const hours = date.getHours()
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  const day = date.getDate()
+
+  // 如果当前时间 < 4点，则属于前一天
+  if (hours < 4) {
+    const yesterday = new Date(date)
+    yesterday.setDate(yesterday.getDate() - 1)
+    return `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+  }
+
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
 // 辅助函数：从 storage 读取 websites 并正确处理类型
 function normalizeWebsites(storageWebsites) {
   if (Array.isArray(storageWebsites)) {
@@ -124,10 +141,19 @@ async function updateTimer(siteId) {
 
     const site = websites[siteIndex]
 
+    // 检查是否需要重置每日摸鱼时间（以4点为界）
+    const currentDateKey = getDateKey()
+    if (!site.lastResetDate || site.lastResetDate !== currentDateKey) {
+      site.dailyTotalTime = 0
+      site.lastResetDate = currentDateKey
+      console.log(`[updateTimer] 重置每日摸鱼时间: ${site.name}, 日期: ${currentDateKey}`)
+    }
+
     // 减少剩余时间
     if (site.remainingTime > 0) {
       site.remainingTime--
-      site.totalTime++
+      site.totalTime++ // 历史累计总时间
+      site.dailyTotalTime++ // 今日摸鱼时间
 
       // 保存更新
       await chrome.storage.local.set({ websites })

@@ -89,7 +89,11 @@
                 <span class="value">{{ formatTime(site.remainingTime) }}</span>
               </div>
               <div class="info-row">
-                <span class="label">总摸鱼时间:</span>
+                <span class="label">今日摸鱼时间:</span>
+                <span class="value">{{ formatTime(site.dailyTotalTime || 0) }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">历史累计时间:</span>
                 <span class="value">{{ formatTime(site.totalTime) }}</span>
               </div>
             </div>
@@ -128,6 +132,23 @@ const editForm = ref({
   name: '',
   url: ''
 })
+
+// 辅助函数：获取当前日期标识（以4点为界）
+function getDateKey(date = new Date()) {
+  const hours = date.getHours()
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  const day = date.getDate()
+
+  // 如果当前时间 < 4点，则属于前一天
+  if (hours < 4) {
+    const yesterday = new Date(date)
+    yesterday.setDate(yesterday.getDate() - 1)
+    return `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+  }
+
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
 
 // 辅助函数：从 storage 读取 websites 并正确处理类型
 function normalizeWebsites(storageWebsites) {
@@ -176,6 +197,8 @@ const loadSettings = async (forceUpdate = false) => {
             // 只更新计时相关的字段，保留用户选择的 delayAmount
             existingSite.remainingTime = newSite.remainingTime
             existingSite.totalTime = newSite.totalTime
+            existingSite.dailyTotalTime = newSite.dailyTotalTime || 0
+            existingSite.lastResetDate = newSite.lastResetDate || getDateKey()
             existingSite.name = newSite.name
             existingSite.url = newSite.url
             existingSite.defaultTime = newSite.defaultTime
@@ -288,6 +311,8 @@ const addWebsite = () => {
     defaultTime: 0,
     remainingTime: 0,
     totalTime: 0,
+    dailyTotalTime: 0,
+    lastResetDate: getDateKey(),
     delayAmount: 300,
     enabled: true
   }
@@ -318,6 +343,8 @@ const addDelay = (site) => {
 const resetTimer = (site) => {
   site.remainingTime = 0
   site.totalTime = 0
+  site.dailyTotalTime = 0
+  site.lastResetDate = getDateKey()
   saveSettings()
   chrome.runtime.sendMessage({
     type: 'UPDATE_TIMER',
