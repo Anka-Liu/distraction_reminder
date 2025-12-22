@@ -45,37 +45,69 @@
           :key="site.id"
           class="website-item"
         >
-          <div class="website-info">
-            <div class="info-row">
-              <span class="label">网站名:</span>
-              <span class="value">{{ site.name }}</span>
+          <!-- 编辑模式 -->
+          <div v-if="editingId === site.id" class="edit-mode">
+            <div class="edit-form">
+              <div class="edit-field">
+                <label>网站名:</label>
+                <input
+                  v-model="editForm.name"
+                  type="text"
+                  placeholder="网站名称"
+                  class="edit-input"
+                />
+              </div>
+              <div class="edit-field">
+                <label>URL:</label>
+                <input
+                  v-model="editForm.url"
+                  type="text"
+                  placeholder="网站URL"
+                  class="edit-input"
+                />
+              </div>
             </div>
-            <div class="info-row">
-              <span class="label">URL:</span>
-              <span class="value">{{ site.url }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">当前倒计时:</span>
-              <span class="value">{{ formatTime(site.remainingTime) }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">总摸鱼时间:</span>
-              <span class="value">{{ formatTime(site.totalTime) }}</span>
+            <div class="edit-actions">
+              <button @click="saveEdit(site)" class="save-edit-btn">保存</button>
+              <button @click="cancelEdit()" class="cancel-edit-btn">取消</button>
             </div>
           </div>
 
-          <div class="website-actions">
-            <select v-model="site.delayAmount" @change="saveSettings()" class="delay-select">
-              <option :value="60">1分钟</option>
-              <option :value="300">5分钟</option>
-              <option :value="600">10分钟</option>
-              <option :value="1800">30分钟</option>
-              <option :value="3600">1小时</option>
-            </select>
-            <button @click="addDelay(site)" class="delay-btn">延时</button>
-            <button @click="resetTimer(site)" class="reset-btn">重置</button>
-            <button @click="deleteWebsite(index)" class="delete-btn">删除</button>
-          </div>
+          <!-- 查看模式 -->
+          <template v-else>
+            <div class="website-info">
+              <div class="info-row">
+                <span class="label">网站名:</span>
+                <span class="value">{{ site.name }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">URL:</span>
+                <span class="value">{{ site.url }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">当前倒计时:</span>
+                <span class="value">{{ formatTime(site.remainingTime) }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">总摸鱼时间:</span>
+                <span class="value">{{ formatTime(site.totalTime) }}</span>
+              </div>
+            </div>
+
+            <div class="website-actions">
+              <select v-model="site.delayAmount" @change="saveSettings()" class="delay-select">
+                <option :value="60">1分钟</option>
+                <option :value="300">5分钟</option>
+                <option :value="600">10分钟</option>
+                <option :value="1800">30分钟</option>
+                <option :value="3600">1小时</option>
+              </select>
+              <button @click="addDelay(site)" class="delay-btn">延时</button>
+              <button @click="resetTimer(site)" class="reset-btn">重置</button>
+              <button @click="startEdit(site)" class="edit-btn">编辑</button>
+              <button @click="deleteWebsite(index)" class="delete-btn">删除</button>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -88,6 +120,11 @@ import { ref, onMounted } from 'vue'
 const redirectUrl = ref('https://www.google.com')
 const websites = ref([])
 const newSite = ref({
+  name: '',
+  url: ''
+})
+const editingId = ref(null)
+const editForm = ref({
   name: '',
   url: ''
 })
@@ -297,6 +334,37 @@ const deleteWebsite = (index) => {
   }
 }
 
+// 开始编辑网站
+const startEdit = (site) => {
+  editingId.value = site.id
+  editForm.value = {
+    name: site.name,
+    url: site.url
+  }
+}
+
+// 取消编辑
+const cancelEdit = () => {
+  editingId.value = null
+  editForm.value = {
+    name: '',
+    url: ''
+  }
+}
+
+// 保存编辑
+const saveEdit = (site) => {
+  if (!editForm.value.name || !editForm.value.url) {
+    alert('请填写网站名称和URL')
+    return
+  }
+
+  site.name = editForm.value.name
+  site.url = editForm.value.url
+  saveSettings()
+  cancelEdit()
+}
+
 onMounted(() => {
   // 首次加载，使用 forceUpdate = true 完全替换数据
   loadSettings(true)
@@ -480,6 +548,66 @@ button:hover {
 
 .delete-btn {
   background: #f44336;
+  color: white;
+}
+
+.edit-btn {
+  background: #9C27B0;
+  color: white;
+}
+
+.edit-mode {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.edit-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.edit-field label {
+  font-weight: bold;
+  color: #666;
+  min-width: 80px;
+}
+
+.edit-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.edit-input:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.save-edit-btn {
+  background: #4CAF50;
+  color: white;
+}
+
+.cancel-edit-btn {
+  background: #757575;
   color: white;
 }
 </style>
