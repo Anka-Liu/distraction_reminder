@@ -27,7 +27,7 @@
         <input
           v-model="newSite.url"
           type="text"
-          placeholder="网站URL (如: bilibili.com)"
+          placeholder="网站URL (如: bilibili.com,b23.tv 多个用逗号分隔)"
         />
         <button @click="addWebsite">添加</button>
       </div>
@@ -62,7 +62,7 @@
                 <input
                   v-model="editForm.url"
                   type="text"
-                  placeholder="网站URL"
+                  placeholder="网站URL (多个用逗号分隔)"
                   class="edit-input"
                 />
               </div>
@@ -91,10 +91,6 @@
               <div class="info-row">
                 <span class="label">今日摸鱼时间:</span>
                 <span class="value">{{ formatTime(site.dailyTotalTime || 0) }}</span>
-              </div>
-              <div class="info-row">
-                <span class="label">历史累计时间:</span>
-                <span class="value">{{ formatTime(site.totalTime) }}</span>
               </div>
             </div>
 

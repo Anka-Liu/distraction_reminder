@@ -41,6 +41,13 @@ function normalizeWebsites(storageWebsites) {
   return []
 }
 
+// 辅助函数：检查URL是否匹配网站的任一域名
+function matchesAnyUrl(tabUrl, siteUrlString) {
+  // 支持逗号、分号、空格分隔的多个URL
+  const urls = siteUrlString.split(/[,;，；\s]+/).map(u => u.trim()).filter(u => u)
+  return urls.some(url => tabUrl.includes(url))
+}
+
 // 创建倒计时覆盖层
 function createCountdownOverlay() {
   if (countdownOverlay) return
@@ -127,7 +134,7 @@ async function checkCurrentUrl() {
 
     // 查找匹配的网站
     const matchedSite = websites.find(site =>
-      site.enabled && currentUrl.includes(site.url)
+      site.enabled && matchesAnyUrl(currentUrl, site.url)
     )
 
     if (matchedSite) {

@@ -347,6 +347,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 })
 
+// 辅助函数：检查URL是否匹配网站的任一域名
+function matchesAnyUrl(tabUrl, siteUrlString) {
+  // 支持逗号、分号、空格分隔的多个URL
+  const urls = siteUrlString.split(/[,;，；\s]+/).map(u => u.trim()).filter(u => u)
+  return urls.some(url => tabUrl.includes(url))
+}
+
 // 检查标签页URL
 async function checkTabUrl(tab) {
   if (!tab.url) return
@@ -371,7 +378,7 @@ async function checkTabUrl(tab) {
     // 检查是否匹配任何摸鱼网站
     for (const site of websites) {
       console.log('[checkTabUrl] 检查网站:', site.name, site.url, 'enabled:', site.enabled)
-      if (site.enabled && tab.url.includes(site.url)) {
+      if (site.enabled && matchesAnyUrl(tab.url, site.url)) {
         // 匹配到摸鱼网站
         console.log('[checkTabUrl] ✓ 匹配到摸鱼网站:', site.name)
         if (!trackingData[site.id] || trackingData[site.id].tabId !== tab.id) {
