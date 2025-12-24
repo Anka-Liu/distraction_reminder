@@ -1,6 +1,8 @@
 // background.js - 后台服务，监控标签页和管理计时器
 let trackingData = {} // 存储每个网站的跟踪信息
 let activeTabId = null
+const DEFAULT_REMINDER_MESSAGE = '开始娱乐前先想想自己的目标，坚持完成计划哦～'
+const tabFocusState = {}
 
 // 辅助函数：获取当前日期标识（以4点为界）
 function getDateKey(date = new Date()) {
@@ -53,7 +55,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // 设置默认配置
 async function initializeDefaultSettings() {
-  const result = await safeStorageGet(['redirectUrl', 'websites'])
+  const result = await safeStorageGet(['redirectUrl', 'websites', 'reminderMessage'])
 
   if (!result) return // 扩展上下文失效
 
@@ -68,6 +70,12 @@ async function initializeDefaultSettings() {
       websites: []
     })
   }
+
+  if (result.reminderMessage === undefined) {
+    await chrome.storage.local.set({
+      reminderMessage: DEFAULT_REMINDER_MESSAGE
+    })
+  }
 }
 
 // 监听来自 content script 的消息
@@ -76,8 +84,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     startTracking(message.siteId, sender.tab.id, message.url)
   } else if (message.type === 'UPDATE_TIMER') {
     updateSiteTimer(message.siteId, message.remainingTime)
+  } else if (message.type === 'REDIRECT_FROM_REMINDER') {
+    // 用户点击"坚持计划，返回任务"按钮，跳转到设置的跳转页面
+    handleReminderRedirect(sender.tab.id)
   }
 })
+
+// 处理从提醒弹窗发起的跳转
+async function handleReminderRedirect(tabId) {
+  try {
+    const result = await safeStorageGet(['redirectUrl'])
+
+    if (!result) {
+      if (__DEV__) console.warn('[handleReminderRedirect] 扩展上下文已失效')
+      return
+    }
+
+    const redirectUrl = result.redirectUrl || 'https://www.google.com'
+
+    // 停止该标签页相关的所有跟踪
+    for (const siteId in trackingData) {
+      if (trackingData[siteId].tabId === tabId) {
+        stopTracking(siteId)
+      }
+    }
+
+    // 执行跳转
+    await chrome.tabs.update(tabId, { url: redirectUrl })
+    console.log('[handleReminderRedirect] 跳转成功:', redirectUrl)
+  } catch (error) {
+    console.error('[handleReminderRedirect] 跳转失败:', error)
+  }
+}
 
 // 开始跟踪网站
 async function startTracking(siteId, tabId, url) {
@@ -266,7 +304,7 @@ async function performRedirect(siteId, redirectUrl) {
 // 手动更新网站计时器（从设置页面调用）
 async function updateSiteTimer(siteId, newRemainingTime) {
   try {
-    const result = await safeStorageGet(['websites'])
+    const result = await safeStorageGet(['websites', 'reminderMessage'])
 
     if (!result) {
       if (__DEV__) console.warn('[updateSiteTimer] 扩展上下文已失效')
@@ -342,6 +380,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
         stopTracking(siteId)
       }
     }
+    delete tabFocusState[tabId]
   } catch (error) {
     console.error('[tabs.onRemoved] 清理跟踪数据失败:', error)
   }
@@ -372,6 +411,14 @@ async function checkTabUrl(tab) {
     console.log('[checkTabUrl] 是否为数组:', Array.isArray(result.websites))
 
     const websites = normalizeWebsites(result.websites)
+    const reminderMessageFromStorage =
+      typeof result.reminderMessage === 'string'
+        ? result.reminderMessage
+        : DEFAULT_REMINDER_MESSAGE
+    const reminderMessage =
+      reminderMessageFromStorage.trim().length > 0
+        ? reminderMessageFromStorage
+        : DEFAULT_REMINDER_MESSAGE
 
     console.log('[checkTabUrl] websites内容:', websites)
     console.log('[checkTabUrl] websites长度:', websites.length)
@@ -381,6 +428,22 @@ async function checkTabUrl(tab) {
       if (site.enabled && matchesAnyUrl(tab.url, site.url)) {
         // 匹配到摸鱼网站
         console.log('[checkTabUrl] ✓ 匹配到摸鱼网站:', site.name)
+        const wasTrackedBefore = tabFocusState[tab.id] === true
+        if (!wasTrackedBefore) {
+          try {
+            await chrome.tabs.sendMessage(tab.id, {
+              type: 'SHOW_REMINDER',
+              message: reminderMessage,
+              siteName: site.name
+            })
+            console.log('[checkTabUrl] 已发送提醒窗口消息:', tab.id)
+          } catch (error) {
+            if (__DEV__) console.warn('[checkTabUrl] 发送提醒失败:', error.message)
+          }
+        }
+
+        tabFocusState[tab.id] = true
+
         if (!trackingData[site.id] || trackingData[site.id].tabId !== tab.id) {
           startTracking(site.id, tab.id, tab.url)
         }
@@ -389,6 +452,7 @@ async function checkTabUrl(tab) {
     }
 
     console.log('[checkTabUrl] 未匹配到任何摸鱼网站')
+    tabFocusState[tab.id] = false
 
     // 不是摸鱼网站，停止该标签页的所有跟踪
     for (const siteId in trackingData) {

@@ -55,6 +55,29 @@
         </div>
       </section>
 
+      <section class="card reminder-card">
+        <div class="card-header">
+          <div>
+            <h2>提醒语设置</h2>
+            <p>当跳转到摸鱼网站的首个标签时会显示的注意事项</p>
+          </div>
+          <span class="badge accent">点醒心灵</span>
+        </div>
+        <div class="card-body form-row">
+          <div class="input-field">
+            <label for="reminder-input">提醒内容</label>
+            <textarea
+              id="reminder-input"
+              v-model="reminderMessage"
+              rows="4"
+              placeholder="例如：先完成今天的任务，再决定稍后想娱乐什么"
+            ></textarea>
+            <small>尽可能加入富有仪式感的内容来提醒自己保持自律</small>
+          </div>
+          <button class="btn primary" @click="saveReminderMessage">保存提醒语</button>
+        </div>
+      </section>
+
       <section class="card add-card" id="add-site">
         <div class="card-header">
           <div>
@@ -192,7 +215,10 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 
+const DEFAULT_REMINDER_MESSAGE = '开始娱乐前先想想自己的目标，坚持完成计划哦～'
+
 const redirectUrl = ref('https://www.google.com')
+const reminderMessage = ref(DEFAULT_REMINDER_MESSAGE)
 const websites = ref([])
 const newSite = ref({
   name: '',
@@ -262,14 +288,21 @@ const scrollToAddForm = () => {
 const loadSettings = async (forceUpdate = false) => {
   try {
     console.log('[OptionsApp] 加载设置...')
-    const result = await chrome.storage.local.get(['redirectUrl', 'websites'])
+    const result = await chrome.storage.local.get(['redirectUrl', 'websites', 'reminderMessage'])
     console.log('[OptionsApp] 加载到的数据:', result)
     console.log('[OptionsApp] result.websites类型:', typeof result.websites)
     console.log('[OptionsApp] 是否为数组:', Array.isArray(result.websites))
 
     // 只在首次加载时更新 redirectUrl，避免覆盖用户正在编辑的内容
-    if (forceUpdate && result.redirectUrl) {
-      redirectUrl.value = result.redirectUrl
+    if (forceUpdate) {
+      if (result.redirectUrl) {
+        redirectUrl.value = result.redirectUrl
+      }
+      if (result.reminderMessage !== undefined) {
+        reminderMessage.value = result.reminderMessage
+      } else {
+        reminderMessage.value = DEFAULT_REMINDER_MESSAGE
+      }
     }
 
     if (result.websites) {
@@ -360,6 +393,24 @@ const saveRedirectUrl = async () => {
   }
 }
 
+// 保存提醒语文本
+const saveReminderMessage = async () => {
+  try {
+    const trimmedMessage = reminderMessage.value.trim()
+    const messageToSave = trimmedMessage || DEFAULT_REMINDER_MESSAGE
+
+    await chrome.storage.local.set({
+      reminderMessage: messageToSave
+    })
+
+    reminderMessage.value = messageToSave
+    alert('提醒语已保存')
+  } catch (error) {
+    console.error('[OptionsApp] 保存提醒语失败:', error)
+    alert('保存失败，请重试')
+  }
+}
+
 // 保存设置（网站列表）
 const saveSettings = async () => {
   try {
@@ -429,9 +480,6 @@ const addDelay = (site) => {
 // 重置计时器
 const resetTimer = (site) => {
   site.remainingTime = 0
-  site.totalTime = 0
-  site.dailyTotalTime = 0
-  site.lastResetDate = getDateKey()
   saveSettings()
   chrome.runtime.sendMessage({
     type: 'UPDATE_TIMER',
@@ -679,6 +727,24 @@ onMounted(() => {
   outline: none;
   border-color: #6366f1;
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.input-field textarea {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.95rem;
+  resize: vertical;
+  background: #f8fafc;
+  min-height: 120px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.input-field textarea:focus {
+  outline: none;
+  border-color: #38bdf8;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
 }
 
 .input-field small {
