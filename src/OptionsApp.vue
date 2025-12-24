@@ -175,10 +175,6 @@
                   <dt>今日摸鱼</dt>
                   <dd>{{ formatTime(site.dailyTotalTime || 0) }}</dd>
                 </div>
-                <div class="stat">
-                  <dt>累计时长</dt>
-                  <dd>{{ formatTime(site.totalTime || 0) }}</dd>
-                </div>
               </dl>
 
               <div class="site-controls">
