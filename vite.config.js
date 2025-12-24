@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       input: {
         options: resolve(__dirname, 'options.html'),
+        popup: resolve(__dirname, 'popup.html'),
         background: resolve(__dirname, 'src/background.js'),
         content: resolve(__dirname, 'src/content.js')
       },
@@ -28,7 +29,7 @@ export default defineConfig(({ mode }) => ({
         },
         chunkFileNames: 'assets/[name].js',
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name === 'options.css') {
+          if (assetInfo.name === 'options.css' || assetInfo.name === 'popup.css') {
             return 'assets/[name][extname]'
           }
           return 'assets/[name][extname]'

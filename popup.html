@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>摸鱼时间控制器</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 280px;
+      padding: 20px;
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+    }
+
+    .popup-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .popup-title {
+      font-size: 18px;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+
+    .popup-subtitle {
+      font-size: 13px;
+      text-align: center;
+      opacity: 0.9;
+      margin-bottom: 8px;
+    }
+
+    .open-settings-btn {
+      width: 100%;
+      padding: 14px 24px;
+      background: rgba(255, 255, 255, 0.95);
+      color: #667eea;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .open-settings-btn:hover {
+      background: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .open-settings-btn:active {
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="popup-container">
+    <h1 class="popup-title">摸鱼时间控制器</h1>
+    <p class="popup-subtitle">管理你的摸鱼网站</p>
+    <button class="open-settings-btn" id="openSettings">
+      打开设置界面
+    </button>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
