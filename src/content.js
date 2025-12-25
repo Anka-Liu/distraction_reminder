@@ -156,26 +156,6 @@ function ensureReminderStyles() {
       pointer-events: none;
     }
 
-    .dc-reminder-close {
-      position: absolute;
-      top: 18px;
-      right: 18px;
-      background: rgba(15, 23, 42, 0.08);
-      border: none;
-      border-radius: 999px;
-      width: 32px;
-      height: 32px;
-      color: #0f172a;
-      font-size: 18px;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.2s ease;
-    }
-
-    .dc-reminder-close:hover {
-      background: rgba(15, 23, 42, 0.2);
-      transform: translateY(-1px);
-    }
-
     .dc-reminder-tag {
       display: inline-flex;
       align-items: center;
@@ -282,13 +262,6 @@ function showReminderOverlay(message, siteName) {
   const card = document.createElement('div')
   card.className = 'dc-reminder-card'
 
-  const closeButton = document.createElement('button')
-  closeButton.className = 'dc-reminder-close'
-  closeButton.type = 'button'
-  closeButton.setAttribute('aria-label', '关闭提醒')
-  closeButton.textContent = '×'
-  closeButton.addEventListener('click', hideReminderOverlay)
-
   const badge = document.createElement('span')
   badge.className = 'dc-reminder-tag'
   badge.textContent = '专注提示'
@@ -300,10 +273,6 @@ function showReminderOverlay(message, siteName) {
   const messageEl = document.createElement('p')
   messageEl.className = 'dc-reminder-message'
   messageEl.textContent = message
-
-  const hint = document.createElement('span')
-  hint.className = 'dc-reminder-highlight'
-  hint.textContent = '站在未来的自己角度，看看现在的决定是否值得？'
 
   const actions = document.createElement('div')
   actions.className = 'dc-reminder-actions'
@@ -329,11 +298,9 @@ function showReminderOverlay(message, siteName) {
   actions.appendChild(primaryBtn)
   actions.appendChild(secondaryBtn)
 
-  card.appendChild(closeButton)
   card.appendChild(badge)
   card.appendChild(title)
   card.appendChild(messageEl)
-  card.appendChild(hint)
   card.appendChild(actions)
 
   overlay.appendChild(card)
@@ -363,10 +330,6 @@ function showReminderOverlay(message, siteName) {
   }
 
   appendOverlay()
-
-  reminderCloseTimeout = setTimeout(() => {
-    hideReminderOverlay()
-  }, 10000)
 }
 
 // 检查当前URL是否匹配摸鱼网站

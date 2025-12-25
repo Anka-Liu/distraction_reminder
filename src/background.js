@@ -399,7 +399,7 @@ async function checkTabUrl(tab) {
 
   try {
     console.log('[checkTabUrl] 检查标签页:', tab.id, tab.url)
-    const result = await safeStorageGet(['websites'])
+    const result = await safeStorageGet(['websites', 'reminderMessage'])
 
     if (!result) {
       if (__DEV__) console.warn('[checkTabUrl] 扩展上下文已失效')
