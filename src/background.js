@@ -1,6 +1,9 @@
 // background.js - 后台服务，监控标签页和管理计时器
-let trackingData = {} // 存储每个网站的跟踪信息
+// trackingData 结构: { tabId: { siteId, url } }
+// 以 tabId 为 key，支持多个标签页同时跟踪同一个网站
+let trackingData = {}
 let activeTabId = null
+let globalTimerInterval = null // 全局计时器，只对激活标签页计时
 const DEFAULT_REMINDER_MESSAGE = '开始娱乐前先想想自己的目标，坚持完成计划哦～'
 const tabFocusState = {}
 
@@ -51,7 +54,27 @@ function normalizeWebsites(storageWebsites) {
 chrome.runtime.onInstalled.addListener(() => {
   console.log('摸鱼控制器已安装')
   initializeDefaultSettings()
+  initializeActiveTab()
 })
+
+// 扩展启动时初始化当前激活的标签页
+chrome.runtime.onStartup.addListener(() => {
+  console.log('摸鱼控制器已启动')
+  initializeActiveTab()
+})
+
+// 初始化当前激活的标签页ID
+async function initializeActiveTab() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (tab) {
+      activeTabId = tab.id
+      console.log('[initializeActiveTab] 初始化激活标签页:', activeTabId)
+    }
+  } catch (error) {
+    console.error('[initializeActiveTab] 初始化失败:', error)
+  }
+}
 
 // 设置默认配置
 async function initializeDefaultSettings() {
@@ -102,12 +125,8 @@ async function handleReminderRedirect(tabId) {
 
     const redirectUrl = result.redirectUrl || 'https://www.google.com'
 
-    // 停止该标签页相关的所有跟踪
-    for (const siteId in trackingData) {
-      if (trackingData[siteId].tabId === tabId) {
-        stopTracking(siteId)
-      }
-    }
+    // 停止该标签页的跟踪
+    stopTracking(tabId)
 
     // 执行跳转
     await chrome.tabs.update(tabId, { url: redirectUrl })
@@ -119,11 +138,19 @@ async function handleReminderRedirect(tabId) {
 
 // 开始跟踪网站
 async function startTracking(siteId, tabId, url) {
-  console.log('开始跟踪网站:', siteId, tabId)
+  console.log('[startTracking] 开始跟踪网站:', siteId, 'tabId:', tabId)
 
-  // 如果已经在跟踪，先停止
-  if (trackingData[siteId]) {
-    stopTracking(siteId)
+  // 如果 activeTabId 还未初始化，立即初始化
+  if (activeTabId === null) {
+    try {
+      const tab = await chrome.tabs.get(tabId)
+      if (tab.active) {
+        activeTabId = tabId
+        console.log('[startTracking] 设置激活标签页:', activeTabId)
+      }
+    } catch (error) {
+      console.error('[startTracking] 获取标签页信息失败:', error)
+    }
   }
 
   // 检查当前网站的剩余时间
@@ -142,50 +169,88 @@ async function startTracking(siteId, tabId, url) {
 
     if (site && site.remainingTime <= 0) {
       // 时间已经用完，立即跳转
-      console.log('网站时间已用完，立即跳转:', site.name)
+      console.log('[startTracking] 网站时间已用完，立即跳转:', site.name)
       try {
         await chrome.tabs.update(tabId, { url: redirectUrl })
-        console.log('直接跳转成功:', redirectUrl)
+        console.log('[startTracking] 直接跳转成功:', redirectUrl)
       } catch (error) {
-        console.error('跳转失败:', error)
+        console.error('[startTracking] 跳转失败:', error)
       }
       return // 不创建跟踪记录
     }
   } catch (error) {
-    console.error('检查剩余时间失败:', error)
+    console.error('[startTracking] 检查剩余时间失败:', error)
   }
 
-  // 创建新的跟踪记录
-  trackingData[siteId] = {
-    tabId: tabId,
-    url: url,
-    interval: setInterval(() => {
-      updateTimer(siteId)
-    }, 1000)
+  // 创建新的跟踪记录（以 tabId 为 key）
+  trackingData[tabId] = {
+    siteId: siteId,
+    url: url
+  }
+
+  console.log('[startTracking] 跟踪记录已创建, trackingData:', Object.keys(trackingData))
+
+  // 确保全局计时器正在运行
+  ensureGlobalTimer()
+}
+
+// 停止跟踪网站（通过 tabId）
+function stopTracking(tabId) {
+  if (trackingData[tabId]) {
+    console.log('[stopTracking] 停止跟踪 tabId:', tabId, 'siteId:', trackingData[tabId].siteId)
+    delete trackingData[tabId]
+  }
+
+  // 如果没有任何跟踪数据了，停止全局计时器
+  if (Object.keys(trackingData).length === 0) {
+    stopGlobalTimer()
   }
 }
 
-// 停止跟踪网站
-function stopTracking(siteId) {
-  if (trackingData[siteId]) {
-    clearInterval(trackingData[siteId].interval)
-    delete trackingData[siteId]
+// 确保全局计时器正在运行
+function ensureGlobalTimer() {
+  if (!globalTimerInterval) {
+    globalTimerInterval = setInterval(() => {
+      updateGlobalTimer()
+    }, 1000)
+    console.log('[ensureGlobalTimer] 全局计时器已启动')
   }
+}
+
+// 停止全局计时器
+function stopGlobalTimer() {
+  if (globalTimerInterval) {
+    clearInterval(globalTimerInterval)
+    globalTimerInterval = null
+    console.log('[stopGlobalTimer] 全局计时器已停止')
+  }
+}
+
+// 全局计时器更新函数
+async function updateGlobalTimer() {
+  // 检查当前是否有激活的标签页
+  if (!activeTabId) {
+    if (__DEV__) console.log('[updateGlobalTimer] activeTabId 为 null，跳过')
+    return
+  }
+
+  // 检查激活的标签页是否在跟踪中
+  const trackingInfo = trackingData[activeTabId]
+  if (!trackingInfo) {
+    if (__DEV__) console.log('[updateGlobalTimer] 当前激活标签页无跟踪网站, activeTabId:', activeTabId)
+    return
+  }
+
+  // 更新该标签页对应的网站计时器
+  await updateTimer(trackingInfo.siteId, activeTabId)
 }
 
 // 更新计时器
-async function updateTimer(siteId) {
+async function updateTimer(siteId, tabId) {
   try {
-    // 检查该网站的tab是否是当前激活的tab
-    if (!trackingData[siteId]) {
-      return
-    }
-
-    const tabId = trackingData[siteId].tabId
-
-    // 只有当该tab是active状态时才进行倒计时
-    if (tabId !== activeTabId) {
-      console.log('[updateTimer] Tab未激活，跳过倒计时:', siteId, 'tabId:', tabId, 'activeTabId:', activeTabId)
+    // 检查该标签页是否还在跟踪中
+    if (!trackingData[tabId]) {
+      if (__DEV__) console.log('[updateTimer] 标签页不在跟踪中, tabId:', tabId)
       return
     }
 
@@ -193,7 +258,7 @@ async function updateTimer(siteId) {
 
     if (!result) {
       if (__DEV__) console.warn('[updateTimer] 扩展上下文已失效')
-      stopTracking(siteId)
+      stopTracking(tabId)
       return
     }
 
@@ -202,7 +267,7 @@ async function updateTimer(siteId) {
 
     const siteIndex = websites.findIndex(site => site.id === siteId)
     if (siteIndex === -1) {
-      stopTracking(siteId)
+      stopTracking(tabId)
       return
     }
 
@@ -237,35 +302,36 @@ async function updateTimer(siteId) {
         if (chrome.runtime.lastError) {
           if (__DEV__) console.warn('[updateTimer] 发送消息到 content script 失败:', chrome.runtime.lastError.message)
           // Tab可能已关闭或content script未加载，停止跟踪
-          stopTracking(siteId)
+          stopTracking(tabId)
           return
         }
       } catch (error) {
         // Tab可能已关闭或无法访问，停止跟踪
         if (__DEV__) console.warn('[updateTimer] 无法发送消息到标签页:', tabId, error.message)
-        stopTracking(siteId)
+        stopTracking(tabId)
         return
       }
 
       // 如果时间到了，执行跳转
       if (site.remainingTime <= 0) {
-        await performRedirect(siteId, redirectUrl)
+        await performRedirect(tabId, redirectUrl)
       }
     }
   } catch (error) {
     console.error('[background.js] 更新计时器失败:', error)
     // 发生错误时停止跟踪，避免继续出错
-    if (trackingData[siteId]) {
-      stopTracking(siteId)
+    if (trackingData[tabId]) {
+      stopTracking(tabId)
     }
   }
 }
 
 // 执行跳转
-async function performRedirect(siteId, redirectUrl) {
-  if (!trackingData[siteId]) return
-
-  const tabId = trackingData[siteId].tabId
+async function performRedirect(tabId, redirectUrl) {
+  if (!trackingData[tabId]) {
+    if (__DEV__) console.warn('[performRedirect] 标签页不在跟踪中, tabId:', tabId)
+    return
+  }
 
   try {
     // 先尝试发送跳转消息给 content script
@@ -285,18 +351,18 @@ async function performRedirect(siteId, redirectUrl) {
     }
 
     // 停止跟踪
-    stopTracking(siteId)
+    stopTracking(tabId)
   } catch (error) {
     console.error('[performRedirect] 跳转失败:', error)
     // 最后尝试直接更新标签页URL
     try {
       await chrome.tabs.update(tabId, { url: redirectUrl })
       console.log('[performRedirect] 备用跳转成功:', redirectUrl)
-      stopTracking(siteId)
+      stopTracking(tabId)
     } catch (updateError) {
       console.error('[performRedirect] 所有跳转方式都失败:', updateError)
       // 即使跳转失败也要停止跟踪，避免继续消耗资源
-      stopTracking(siteId)
+      stopTracking(tabId)
     }
   }
 }
@@ -318,22 +384,23 @@ async function updateSiteTimer(siteId, newRemainingTime) {
       websites[siteIndex].remainingTime = newRemainingTime
       await chrome.storage.local.set({ websites })
 
-      // 如果正在跟踪这个网站，更新显示
-      if (trackingData[siteId]) {
-        const tabId = trackingData[siteId].tabId
-        try {
-          await chrome.tabs.sendMessage(tabId, {
-            type: 'UPDATE_COUNTDOWN',
-            siteId: siteId,
-            remainingTime: newRemainingTime
-          })
+      // 遍历所有跟踪的标签页，找到该网站的所有标签页并更新显示
+      for (const tabId in trackingData) {
+        if (trackingData[tabId].siteId === siteId) {
+          try {
+            await chrome.tabs.sendMessage(parseInt(tabId), {
+              type: 'UPDATE_COUNTDOWN',
+              siteId: siteId,
+              remainingTime: newRemainingTime
+            })
 
-          // 检查是否有运行时错误
-          if (chrome.runtime.lastError) {
-            if (__DEV__) console.warn('[updateSiteTimer] 发送消息失败:', chrome.runtime.lastError.message)
+            // 检查是否有运行时错误
+            if (chrome.runtime.lastError) {
+              if (__DEV__) console.warn('[updateSiteTimer] 发送消息失败:', chrome.runtime.lastError.message)
+            }
+          } catch (error) {
+            if (__DEV__) console.warn('[updateSiteTimer] 更新显示失败:', error.message)
           }
-        } catch (error) {
-          if (__DEV__) console.warn('[updateSiteTimer] 更新显示失败:', error.message)
         }
       }
     }
@@ -374,12 +441,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // 监听标签页关闭
 chrome.tabs.onRemoved.addListener((tabId) => {
   try {
-    // 停止该标签页相关的所有跟踪
-    for (const siteId in trackingData) {
-      if (trackingData[siteId].tabId === tabId) {
-        stopTracking(siteId)
-      }
-    }
+    // 停止该标签页的跟踪
+    stopTracking(tabId)
     delete tabFocusState[tabId]
   } catch (error) {
     console.error('[tabs.onRemoved] 清理跟踪数据失败:', error)
@@ -444,7 +507,8 @@ async function checkTabUrl(tab) {
 
         tabFocusState[tab.id] = true
 
-        if (!trackingData[site.id] || trackingData[site.id].tabId !== tab.id) {
+        // 检查该标签页是否已经在跟踪中，且跟踪的是正确的网站
+        if (!trackingData[tab.id] || trackingData[tab.id].siteId !== site.id) {
           startTracking(site.id, tab.id, tab.url)
         }
         return
@@ -454,11 +518,9 @@ async function checkTabUrl(tab) {
     console.log('[checkTabUrl] 未匹配到任何摸鱼网站')
     tabFocusState[tab.id] = false
 
-    // 不是摸鱼网站，停止该标签页的所有跟踪
-    for (const siteId in trackingData) {
-      if (trackingData[siteId].tabId === tab.id) {
-        stopTracking(siteId)
-      }
+    // 不是摸鱼网站，停止该标签页的跟踪
+    if (trackingData[tab.id]) {
+      stopTracking(tab.id)
     }
   } catch (error) {
     console.error('[background.js] 检查URL失败:', error)
