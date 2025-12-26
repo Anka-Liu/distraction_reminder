@@ -55,12 +55,14 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('摸鱼控制器已安装')
   initializeDefaultSettings()
   initializeActiveTab()
+  checkAndResetDailyTime() // 安装时检查并重置每日时间
 })
 
 // 扩展启动时初始化当前激活的标签页
 chrome.runtime.onStartup.addListener(() => {
   console.log('摸鱼控制器已启动')
   initializeActiveTab()
+  checkAndResetDailyTime() // 启动时检查并重置每日时间
 })
 
 // 初始化当前激活的标签页ID
@@ -98,6 +100,42 @@ async function initializeDefaultSettings() {
     await chrome.storage.local.set({
       reminderMessage: DEFAULT_REMINDER_MESSAGE
     })
+  }
+}
+
+// 检查并重置所有网站的每日摸鱼时间（如果日期已变更）
+async function checkAndResetDailyTime() {
+  try {
+    const result = await safeStorageGet(['websites'])
+
+    if (!result) {
+      console.warn('[checkAndResetDailyTime] 扩展上下文已失效')
+      return
+    }
+
+    const websites = normalizeWebsites(result.websites)
+    const currentDateKey = getDateKey()
+    let hasChanges = false
+
+    for (const site of websites) {
+      // 检查是否需要重置
+      if (!site.lastResetDate || site.lastResetDate !== currentDateKey) {
+        console.log(`[checkAndResetDailyTime] 重置网站每日时间: ${site.name}, 旧日期: ${site.lastResetDate || '无'}, 新日期: ${currentDateKey}`)
+        site.dailyTotalTime = 0
+        site.lastResetDate = currentDateKey
+        hasChanges = true
+      }
+    }
+
+    // 如果有变更，保存到 storage
+    if (hasChanges) {
+      await chrome.storage.local.set({ websites })
+      console.log('[checkAndResetDailyTime] 已重置每日摸鱼时间')
+    } else {
+      console.log('[checkAndResetDailyTime] 无需重置，日期未变更')
+    }
+  } catch (error) {
+    console.error('[checkAndResetDailyTime] 检查并重置失败:', error)
   }
 }
 
