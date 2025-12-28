@@ -89,6 +89,24 @@ npm run build
 
 构建完成后，会在 `dist` 目录生成扩展文件。
 
+### 打包 CRX 文件
+```bash
+# 构建并打包成 .crx 文件（一键完成）
+npm run build:crx
+
+# 或分步执行
+npm run build   # 先构建
+npm run pack    # 再打包
+```
+
+打包完成后会生成以下文件：
+- `distraction-controller.crx` - Chrome 扩展安装包
+- `distraction-controller.pem` - 私钥文件（首次生成，**请妥善保管**）
+- `distraction-controller.zip` - ZIP 格式压缩包
+- 扩展 ID 会在控制台输出
+
+**注意：** 私钥文件（.pem）用于扩展签名，更新扩展时需要使用相同的私钥。请勿删除或泄露此文件。
+
 ### 开发模式
 ```bash
 # 开发模式（启用调试日志）
