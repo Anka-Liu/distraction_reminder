@@ -117,7 +117,6 @@
           <h2>网站管理面板</h2>
           <p>查看每个站点的倒计时状态，并快速延长或重置</p>
         </div>
-        <button class="btn ghost" @click="loadSettings(true)">手动同步</button>
       </div>
 
       <div class="websites-board">
