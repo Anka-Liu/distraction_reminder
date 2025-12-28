@@ -8,12 +8,13 @@
  * 2. npm run pack         # 打包成 .crx 文件
  *
  * 输出：
- * - distraction-controller.crx  # Chrome 扩展安装包
- * - distraction-controller.pem  # 私钥文件（首次生成，需妥善保管）
+ * - distraction-controller-v{version}.crx  # Chrome 扩展安装包（包含版本号）
+ * - distraction-controller-v{version}.zip  # ZIP 格式（包含版本号）
+ * - distraction-controller.pem             # 私钥文件（首次生成，需妥善保管）
  */
 
 import crx3 from 'crx3';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -23,9 +24,21 @@ const __dirname = dirname(__filename);
 async function buildCRX() {
   console.log('🚀 开始打包 CRX 文件...\n');
 
-  // 配置路径
+  // 读取 manifest.json 获取版本号
+  const manifestPath = resolve(__dirname, 'public/manifest.json');
+  let version = '1.0.0';
+  try {
+    const manifestContent = readFileSync(manifestPath, 'utf-8');
+    const manifest = JSON.parse(manifestContent);
+    version = manifest.version || '1.0.0';
+    console.log(`📌 当前版本：${version}\n`);
+  } catch (error) {
+    console.warn('⚠️  无法读取 manifest.json，使用默认版本号 1.0.0\n');
+  }
+
+  // 配置路径（文件名包含版本号）
   const distDir = resolve(__dirname, 'dist');
-  const crxPath = resolve(__dirname, 'distraction-controller.crx');
+  const crxPath = resolve(__dirname, `distraction-controller-v${version}.crx`);
   const pemPath = resolve(__dirname, 'distraction-controller.pem');
 
   // 检查 dist 目录是否存在
@@ -40,7 +53,7 @@ async function buildCRX() {
     const result = await crx3([distDir], {
       keyPath: pemPath,      // 私钥路径
       crxPath: crxPath,      // 输出 .crx 文件路径
-      zipPath: resolve(__dirname, 'distraction-controller.zip') // 可选：同时输出 zip
+      zipPath: resolve(__dirname, `distraction-controller-v${version}.zip`) // 可选：同时输出 zip
     });
 
     // 检查是否生成了新的私钥
@@ -53,7 +66,7 @@ async function buildCRX() {
 
     console.log('✅ CRX 文件打包成功！');
     console.log(`📦 输出文件：${crxPath}`);
-    console.log(`📦 ZIP 文件：${resolve(__dirname, 'distraction-controller.zip')}`);
+    console.log(`📦 ZIP 文件：${resolve(__dirname, `distraction-controller-v${version}.zip`)}`);
     console.log(`🆔 扩展 ID：${result.appId}\n`);
     console.log('📖 使用说明：');
     console.log('1. 打开 Chrome 浏览器');
