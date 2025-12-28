@@ -139,7 +139,7 @@ async function checkAndResetDailyTime() {
   }
 }
 
-// 监听来自 content script 的消息
+// 监听来自 content script 和 options 页面的消息
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'START_TRACKING') {
     startTracking(message.siteId, sender.tab.id, message.url)
@@ -148,7 +148,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === 'REDIRECT_FROM_REMINDER') {
     // 用户点击"坚持计划，返回任务"按钮，跳转到设置的跳转页面
     handleReminderRedirect(sender.tab.id)
+  } else if (message.type === 'CHECK_AND_RESET_DAILY_TIME') {
+    // options 页面请求检查并重置每日时间
+    checkAndResetDailyTime()
+    sendResponse({ success: true })
   }
+  return true // 保持消息通道开放以支持异步响应
 })
 
 // 处理从提醒弹窗发起的跳转

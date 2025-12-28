@@ -522,7 +522,15 @@ const saveEdit = (site) => {
   cancelEdit()
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 请求后台检查并重置每日时间（如果日期已变更）
+  try {
+    await chrome.runtime.sendMessage({ type: 'CHECK_AND_RESET_DAILY_TIME' })
+    console.log('[OptionsApp] 已请求检查并重置每日时间')
+  } catch (error) {
+    console.error('[OptionsApp] 请求检查重置失败:', error)
+  }
+
   // 首次加载，使用 forceUpdate = true 完全替换数据
   loadSettings(true)
 
